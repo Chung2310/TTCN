@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Dự đoán chuỗi thời gian mờ</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f8f9fa;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: white;
+            padding: 2rem;
+            border-radius: 10px;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .card {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            margin-bottom: 1.5rem;
+            border: none;
+        }
+        .card-header {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            border-bottom: none;
+            border-radius: 10px 10px 0 0 !important;
+            padding: 1rem;
+        }
+        .step-title {
+            color: #2c3e50;
+            margin: 0;
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+        .step-description {
+            color: #666;
+            font-size: 0.9rem;
+            margin-top: 0.5rem;
+        }
+        .model-selection, .clustering-method {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            margin-bottom: 1.5rem;
+        }
+        .model-selection select, .clustering-method select {
+            padding: 0.5rem;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+            width: 100%;
+            max-width: 300px;
+        }
+        .file-input {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            margin-bottom: 1.5rem;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            border: none;
+            padding: 0.5rem 1.5rem;
+            border-radius: 5px;
+            transition: all 0.3s ease;
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+        .table {
+            background: white;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        .table thead th {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            border: none;
+            color: #2c3e50;
+            font-weight: 600;
+        }
+        .table td {
+            vertical-align: middle;
+        }
+        .chart-container {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            margin: 1.5rem 0;
+        }
+        .method-description {
+            margin-top: 0.5rem;
+            color: #666;
+            font-size: 0.9rem;
+        }
+        .future-predictions {
+            background: linear-gradient(135deg, #e8f4f8 0%, #c3cfe2 100%);
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 2rem;
+        }
+        .loading i {
+            font-size: 2rem;
+            color: #1e3c72;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header text-center">
+            <h1><i class="fas fa-chart-line"></i> Dự đoán chuỗi thời gian mờ</h1>
+            <p class="lead">Phân tích và dự đoán dữ liệu chuỗi thời gian sử dụng logic mờ</p>
+        </div>
+
+        <!-- Chọn mô hình -->
+        <div class="model-selection">
+            <h5><i class="fas fa-cogs"></i> Chọn mô hình dự đoán</h5>
+            <select id="modelSelect" class="form-select">
+                <option value="kmeans">CTGM-KM (Chuỗi thời gian mờ - K-means)</option>
+                <option value="kmeans_pso">CTGM-KMPSO (Chuỗi thời gian mờ - K-means + PSO)</option>
+            </select>
+        </div>
+
+        <!-- Chọn phương pháp phân khoảng -->
+        <div class="clustering-method">
+            <h5><i class="fas fa-layer-group"></i> Chọn phương pháp phân khoảng</h5>
+            <select id="clusteringMethod" class="form-select" onchange="updateMethodDescription()">
+                <option value="kmeans">K-means Clustering</option>
+                <option value="kmeans_pso">K-means + PSO</option>
+                <option value="equal_width">Equal Width</option>
+                <option value="equal_frequency">Equal Frequency</option>
+            </select>
+            <div id="methodDescription" class="method-description"></div>
+        </div>
+
+        <!-- Upload file -->
+        <div class="file-input">
+            <h5><i class="fas fa-file-upload"></i> Tải dữ liệu</h5>
+            <div class="input-group">
+                <input type="file" class="form-control" id="dataFile" accept=".csv,.txt">
+                <button class="btn btn-primary" onclick="uploadFile()">
+                    <i class="fas fa-upload"></i> Tải lên
+                </button>
+            </div>
+        </div>
+
+        <!-- Loading indicator -->
+        <div id="loading" class="loading">
+            <i class="fas fa-spinner"></i>
+            <p>Đang xử lý dữ liệu...</p>
+        </div>
+
+        <!-- Các bước xử lý -->
+        <div id="step1" class="card">
+            <div class="card-header">
+                <h5 class="step-title"><i class="fas fa-database"></i> Bước 1: Dữ liệu gốc</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table id="table1" class="table">
+                        <thead>
+                            <tr>
+                                <th>Ngày</th>
+                                <th>Giá trị</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bước 2: Xác định miền vũ trụ -->
+        <div id="step2" class="card">
+            <div class="card-header">
+                <h5 class="step-title"><i class="fas fa-globe"></i> Bước 2: Xác định miền vũ trụ</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table id="table2" class="table">
+                        <thead>
+                            <tr>
+                                <th>Dmin</th>
+                                <th>Dmax</th>
+                                <th>Miền mở rộng</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bước 3: Chia khoảng -->
+        <div id="step3" class="card">
+            <div class="card-header">
+                <h5 class="step-title"><i class="fas fa-bars"></i> Bước 3: Chia khoảng</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table id="table3" class="table">
+                        <thead>
+                            <tr>
+                                <th>Khoảng</th>
+                                <th>Giá trị</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bước 4: Xác định tập mờ -->
+        <div id="step4" class="card">
+            <div class="card-header">
+                <h5 class="step-title"><i class="fas fa-cubes"></i> Bước 4: Xác định tập mờ</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table id="table4" class="table">
+                        <thead>
+                            <tr>
+                                <th>Tập mờ</th>
+                                <th>Khoảng</th>
+                                <th>Hàm thành viên</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bước 5: Fuzzify dữ liệu -->
+        <div id="step5" class="card">
+            <div class="card-header">
+                <h5 class="step-title"><i class="fas fa-cubes"></i> Bước 5: Fuzzify dữ liệu</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table id="table5" class="table">
+                        <thead>
+                            <tr>
+                                <th>Ngày</th>
+                                <th>Giá trị gốc</th>
+                                <th>Tập mờ</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bước 6: Xác định mối quan hệ mờ -->
+        <div id="step6" class="card">
+            <div class="card-header">
+                <h5 class="step-title"><i class="fas fa-link"></i> Bước 6: Xác định mối quan hệ mờ</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table id="table6" class="table">
+                        <thead>
+                            <tr>
+                                <th>Tập mờ hiện tại</th>
+                                <th>Tập mờ tiếp theo</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bước 7: Dự đoán -->
+        <div id="step7" class="card">
+            <div class="card-header">
+                <h5 class="step-title"><i class="fas fa-chart-bar"></i> Bước 7: Kết quả dự đoán</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table id="table7" class="table">
+                        <thead>
+                            <tr>
+                                <th>Ngày</th>
+                                <th>Giá trị thực tế</th>
+                                <th>Giá trị dự đoán</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Nút vẽ biểu đồ -->
+        <button class="btn btn-primary w-100" onclick="showChart()">
+            <i class="fas fa-chart-bar"></i> Vẽ biểu đồ so sánh
+        </button>
+
+        <!-- Container cho biểu đồ -->
+        <div id="chartContainer" class="chart-container">
+            <canvas id="comparisonChart"></canvas>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function updateMethodDescription() {
+            const method = document.getElementById('clusteringMethod').value;
+            const description = document.getElementById('methodDescription');
+            
+            const descriptions = {
+                'kmeans': 'K-means Clustering: Phân cụm dữ liệu dựa trên khoảng cách đến tâm cụm.',
+                'kmeans_pso': 'K-means + PSO: Kết hợp K-means với Particle Swarm Optimization để tối ưu hóa tâm cụm.',
+                'equal_width': 'Equal Width: Chia khoảng có chiều rộng bằng nhau trên miền giá trị.',
+                'equal_frequency': 'Equal Frequency: Chia khoảng sao cho mỗi khoảng chứa số lượng điểm dữ liệu bằng nhau.'
+            };
+            
+            description.textContent = descriptions[method];
+        }
+
+        function uploadFile() {
+            const fileInput = document.getElementById('dataFile');
+            const modelSelect = document.getElementById('modelSelect');
+            const clusteringMethod = document.getElementById('clusteringMethod');
+            const loading = document.getElementById('loading');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                alert('Vui lòng chọn file dữ liệu!');
+                return;
+            }
+
+            // Hiển thị loading
+            loading.style.display = 'block';
+            document.querySelectorAll('.card').forEach(card => card.style.display = 'none');
+            document.getElementById('chartContainer').style.display = 'none';
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const data = e.target.result.split('\n')
+                    .filter(line => line.trim() !== '');
+
+                // Hiển thị dữ liệu gốc (Bước 1)
+                displayStep1(data);
+
+                fetch('/predict', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        data: data,
+                        model: modelSelect.value,
+                        clustering_method: clusteringMethod.value
+                    })
+                })
+                .then(response => response.json())
+                .then(result => {
+                    // Hiển thị kết quả cho từng bước
+                    displayStep2(result.universe);
+                    displayStep3(result.intervals);
+                    displayStep4(result.fuzzy_sets);
+                    displayStep5(result.fuzzified_data);
+                    displayStep6(result.fuzzy_relations);
+                    displayStep7(result.predictions);
+                    
+                    // Ẩn loading
+                    loading.style.display = 'none';
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Có lỗi xảy ra khi xử lý dữ liệu!');
+                    loading.style.display = 'none';
+                });
+            };
+            reader.readAsText(file);
+        }
+
+        function displayStep1(data) {
+            const table = document.querySelector('#table1 tbody');
+            table.innerHTML = '';
+            data.forEach(line => {
+                const parts = line.trim().split(/\s+/);
+                if (parts.length >= 2) {
+                    const row = table.insertRow();
+                    row.insertCell(0).textContent = parts[0];
+                    row.insertCell(1).textContent = parts[1];
+                }
+            });
+            document.getElementById('step1').style.display = 'block';
+        }
+
+        function displayStep2(universe) {
+            const table = document.querySelector('#table2 tbody');
+            table.innerHTML = `
+                <tr>
+                    <td>${universe.min.toFixed(2)}</td>
+                    <td>${universe.max.toFixed(2)}</td>
+                    <td>[${universe.extended_min.toFixed(2)}, ${universe.extended_max.toFixed(2)}]</td>
+                </tr>
+            `;
+            document.getElementById('step2').style.display = 'block';
+        }
+
+        function displayStep3(intervals) {
+            const table = document.querySelector('#table3 tbody');
+            table.innerHTML = '';
+            intervals.forEach((interval, index) => {
+                const row = table.insertRow();
+                row.insertCell(0).textContent = `u${index + 1}`;
+                row.insertCell(1).textContent = `[${interval[0].toFixed(2)}, ${interval[1].toFixed(2)}]`;
+            });
+            document.getElementById('step3').style.display = 'block';
+        }
+
+        function displayStep4(fuzzySets) {
+            const table = document.querySelector('#table4 tbody');
+            table.innerHTML = '';
+            fuzzySets.forEach((set, index) => {
+                const row = table.insertRow();
+                row.insertCell(0).textContent = `A${index + 1}`;
+                row.insertCell(1).textContent = `[${set.interval[0].toFixed(2)}, ${set.interval[1].toFixed(2)}]`;
+                row.insertCell(2).textContent = set.membership;
+            });
+            document.getElementById('step4').style.display = 'block';
+        }
+
+        function displayStep5(fuzzifiedData) {
+            const table = document.querySelector('#table5 tbody');
+            table.innerHTML = '';
+            fuzzifiedData.forEach(item => {
+                const row = table.insertRow();
+                row.insertCell(0).textContent = item.date;
+                row.insertCell(1).textContent = item.original.toFixed(2);
+                row.insertCell(2).textContent = item.fuzzy_set;
+            });
+            document.getElementById('step5').style.display = 'block';
+        }
+
+        function displayStep6(fuzzyRelations) {
+            const table = document.querySelector('#table6 tbody');
+            table.innerHTML = '';
+            fuzzyRelations.forEach(relation => {
+                const row = table.insertRow();
+                row.insertCell(0).textContent = relation.current;
+                row.insertCell(1).textContent = relation.next;
+            });
+            document.getElementById('step6').style.display = 'block';
+        }
+
+        let chartData = null;
+        let comparisonChart = null;
+
+        function showChart() {
+            if (!chartData) {
+                alert('Vui lòng tải dữ liệu trước khi vẽ biểu đồ!');
+                return;
+            }
+
+            const chartContainer = document.getElementById('chartContainer');
+            chartContainer.style.display = 'block';
+
+            // Xóa biểu đồ cũ nếu có
+            if (comparisonChart) {
+                comparisonChart.destroy();
+            }
+
+            const ctx = document.getElementById('comparisonChart').getContext('2d');
+            
+            // Tính toán min và max cho trục y
+            const allValues = [...chartData.actual, ...chartData.predicted];
+            const minValue = Math.min(...allValues);
+            const maxValue = Math.max(...allValues);
+            const padding = (maxValue - minValue) * 0.1; // Thêm 10% padding
+
+            // Tạo biểu đồ mới
+            comparisonChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: chartData.labels,
+                    datasets: [
+                        {
+                            label: 'Giá trị thực tế',
+                            data: chartData.actual,
+                            borderColor: 'rgb(75, 192, 192)',
+                            backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                            tension: 0.1,
+                            fill: false,
+                            pointRadius: 4,
+                            pointHoverRadius: 6
+                        },
+                        {
+                            label: 'Giá trị dự đoán',
+                            data: chartData.predicted,
+                            borderColor: 'rgb(255, 99, 132)',
+                            backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                            tension: 0.1,
+                            fill: false,
+                            pointRadius: 4,
+                            pointHoverRadius: 6
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        intersect: false,
+                        mode: 'index'
+                    },
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'So sánh giá trị thực tế và dự đoán',
+                            font: {
+                                size: 16,
+                                weight: 'bold'
+                            }
+                        },
+                        legend: {
+                            position: 'top',
+                            labels: {
+                                usePointStyle: true,
+                                padding: 20
+                            }
+                        },
+                        tooltip: {
+                            enabled: true,
+                            mode: 'index',
+                            intersect: false,
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    if (context.parsed.y !== null) {
+                                        label += context.parsed.y.toFixed(2);
+                                    }
+                                    return label;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            min: minValue - padding,
+                            max: maxValue + padding,
+                            beginAtZero: false,
+                            title: {
+                                display: true,
+                                text: 'Giá trị',
+                                font: {
+                                    weight: 'bold'
+                                }
+                            },
+                            grid: {
+                                color: 'rgba(0, 0, 0, 0.1)'
+                            },
+                            ticks: {
+                                callback: function(value) {
+                                    return value.toFixed(2);
+                                }
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Ngày',
+                                font: {
+                                    weight: 'bold'
+                                }
+                            },
+                            grid: {
+                                color: 'rgba(0, 0, 0, 0.1)'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function displayStep7(predictions) {
+            const table = document.querySelector('#table7 tbody');
+            table.innerHTML = '';
+            
+            // Chuẩn bị dữ liệu cho biểu đồ
+            chartData = {
+                labels: [],
+                actual: [],
+                predicted: []
+            };
+
+            predictions.forEach(prediction => {
+                const row = table.insertRow();
+                row.insertCell(0).textContent = prediction.date;
+                row.insertCell(1).textContent = prediction.actual.toFixed(2);
+                row.insertCell(2).textContent = prediction.predicted.toFixed(2);
+
+                // Thêm dữ liệu cho biểu đồ
+                chartData.labels.push(prediction.date);
+                chartData.actual.push(prediction.actual);
+                chartData.predicted.push(prediction.predicted);
+            });
+            
+            document.getElementById('step7').style.display = 'block';
+            // Tự động hiển thị biểu đồ sau khi có dữ liệu
+            showChart();
+        }
+    </script>
+</body>
+</html> 
