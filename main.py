@@ -425,7 +425,8 @@ def predict():
     data = request.json.get('data', [])
     model_type = request.json.get('model', 'kmeans')
     clustering_method = request.json.get('clustering_method', 'kmeans')
-    result = fuzzy_time_series_prediction(data, model_type=model_type, clustering_method=clustering_method)
+    num_intervals = request.json.get('num_intervals', 7)
+    result = fuzzy_time_series_prediction(data, model_type=model_type, clustering_method=clustering_method, num_intervals=num_intervals)
     return jsonify(result)
 
 if __name__ == '__main__':

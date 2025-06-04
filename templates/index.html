@@ -144,14 +144,32 @@
             </select>
         </div>
 
+        <!-- Chọn số khoảng -->
+        <div class="clustering-method">
+            <h5><i class="fas fa-hashtag"></i> Chọn số khoảng</h5>
+            <select id="numIntervals" class="form-select">
+                <option value="3">3 khoảng</option>
+                <option value="4">4 khoảng</option>
+                <option value="5">5 khoảng</option>
+                <option value="6">6 khoảng</option>
+                <option value="7" selected>7 khoảng</option>
+                <option value="8">8 khoảng</option>
+                <option value="9">9 khoảng</option>
+                <option value="10">10 khoảng</option>
+            </select>
+            <div class="method-description">
+                Số khoảng càng lớn, độ chính xác càng cao nhưng thời gian xử lý sẽ lâu hơn.
+            </div>
+        </div>
+
         <!-- Chọn phương pháp phân khoảng -->
         <div class="clustering-method">
             <h5><i class="fas fa-layer-group"></i> Chọn phương pháp phân khoảng</h5>
             <select id="clusteringMethod" class="form-select" onchange="updateMethodDescription()">
-                <option value="kmeans">K-means Clustering</option>
+                <option value="kmeans">Phân cụm K-means</option>
                 <option value="kmeans_pso">K-means + PSO</option>
-                <option value="equal_width">Equal Width</option>
-                <option value="equal_frequency">Equal Frequency</option>
+                <option value="equal_width">Chiều rộng bằng nhau</option>
+                <option value="equal_frequency">Tần suất bằng nhau</option>
             </select>
             <div id="methodDescription" class="method-description"></div>
         </div>
@@ -203,8 +221,8 @@
                     <table id="table2" class="table">
                         <thead>
                             <tr>
-                                <th>Dmin</th>
-                                <th>Dmax</th>
+                                <th>Giá trị nhỏ nhất</th>
+                                <th>Giá trị lớn nhất</th>
                                 <th>Miền mở rộng</th>
                             </tr>
                         </thead>
@@ -317,6 +335,26 @@
             </div>
         </div>
 
+        <!-- Dự đoán tương lai -->
+        <div id="futurePredictions" class="card">
+            <div class="card-header">
+                <h5 class="step-title"><i class="fas fa-calendar-alt"></i> Dự đoán 10 ngày tiếp theo</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table id="tableFuture" class="table">
+                        <thead>
+                            <tr>
+                                <th>Ngày</th>
+                                <th>Giá trị dự đoán</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
         <!-- Nút vẽ biểu đồ -->
         <button class="btn btn-primary w-100" onclick="showChart()">
             <i class="fas fa-chart-bar"></i> Vẽ biểu đồ so sánh
@@ -336,10 +374,10 @@
             const description = document.getElementById('methodDescription');
             
             const descriptions = {
-                'kmeans': 'K-means Clustering: Phân cụm dữ liệu dựa trên khoảng cách đến tâm cụm.',
+                'kmeans': 'Phân cụm K-means: Phân cụm dữ liệu dựa trên khoảng cách đến tâm cụm.',
                 'kmeans_pso': 'K-means + PSO: Kết hợp K-means với Particle Swarm Optimization để tối ưu hóa tâm cụm.',
-                'equal_width': 'Equal Width: Chia khoảng có chiều rộng bằng nhau trên miền giá trị.',
-                'equal_frequency': 'Equal Frequency: Chia khoảng sao cho mỗi khoảng chứa số lượng điểm dữ liệu bằng nhau.'
+                'equal_width': 'Chiều rộng bằng nhau: Chia khoảng có chiều rộng bằng nhau trên miền giá trị.',
+                'equal_frequency': 'Tần suất bằng nhau: Chia khoảng sao cho mỗi khoảng chứa số lượng điểm dữ liệu bằng nhau.'
             };
             
             description.textContent = descriptions[method];
@@ -349,6 +387,7 @@
             const fileInput = document.getElementById('dataFile');
             const modelSelect = document.getElementById('modelSelect');
             const clusteringMethod = document.getElementById('clusteringMethod');
+            const numIntervals = document.getElementById('numIntervals');
             const loading = document.getElementById('loading');
             const file = fileInput.files[0];
             
@@ -378,7 +417,8 @@
                     body: JSON.stringify({
                         data: data,
                         model: modelSelect.value,
-                        clustering_method: clusteringMethod.value
+                        clustering_method: clusteringMethod.value,
+                        num_intervals: parseInt(numIntervals.value)
                     })
                 })
                 .then(response => response.json())
@@ -389,7 +429,7 @@
                     displayStep4(result.fuzzy_sets);
                     displayStep5(result.fuzzified_data);
                     displayStep6(result.fuzzy_relations);
-                    displayStep7(result.predictions);
+                    displayStep7(result.predictions, result.future_predictions);
                     
                     // Ẩn loading
                     loading.style.display = 'none';
@@ -495,7 +535,7 @@
             const ctx = document.getElementById('comparisonChart').getContext('2d');
             
             // Tính toán min và max cho trục y
-            const allValues = [...chartData.actual, ...chartData.predicted];
+            const allValues = [...chartData.actual, ...chartData.predicted, ...chartData.futurePredicted];
             const minValue = Math.min(...allValues);
             const maxValue = Math.max(...allValues);
             const padding = (maxValue - minValue) * 0.1; // Thêm 10% padding
@@ -504,27 +544,42 @@
             comparisonChart = new Chart(ctx, {
                 type: 'line',
                 data: {
-                    labels: chartData.labels,
+                    labels: [...chartData.labels, ...chartData.futureLabels],
                     datasets: [
                         {
                             label: 'Giá trị thực tế',
-                            data: chartData.actual,
+                            data: [...chartData.actual, ...Array(chartData.futureLabels.length).fill(null)],
                             borderColor: 'rgb(75, 192, 192)',
                             backgroundColor: 'rgba(75, 192, 192, 0.2)',
                             tension: 0.1,
                             fill: false,
                             pointRadius: 4,
-                            pointHoverRadius: 6
+                            pointHoverRadius: 6,
+                            borderWidth: 2
                         },
                         {
-                            label: 'Giá trị dự đoán',
-                            data: chartData.predicted,
+                            label: 'Giá trị dự đoán (lịch sử)',
+                            data: [...chartData.predicted, ...Array(chartData.futureLabels.length).fill(null)],
                             borderColor: 'rgb(255, 99, 132)',
                             backgroundColor: 'rgba(255, 99, 132, 0.2)',
                             tension: 0.1,
                             fill: false,
                             pointRadius: 4,
-                            pointHoverRadius: 6
+                            pointHoverRadius: 6,
+                            borderWidth: 2,
+                            borderDash: [5, 5]
+                        },
+                        {
+                            label: 'Dự đoán tương lai',
+                            data: [...Array(chartData.labels.length).fill(null), ...chartData.futurePredicted],
+                            borderColor: 'rgb(153, 102, 255)',
+                            backgroundColor: 'rgba(153, 102, 255, 0.2)',
+                            tension: 0.1,
+                            fill: false,
+                            pointRadius: 4,
+                            pointHoverRadius: 6,
+                            borderWidth: 2,
+                            borderDash: [2, 2]
                         }
                     ]
                 },
@@ -542,19 +597,32 @@
                             font: {
                                 size: 16,
                                 weight: 'bold'
+                            },
+                            padding: {
+                                top: 10,
+                                bottom: 20
                             }
                         },
                         legend: {
                             position: 'top',
                             labels: {
                                 usePointStyle: true,
-                                padding: 20
+                                padding: 20,
+                                font: {
+                                    size: 12
+                                }
                             }
                         },
                         tooltip: {
                             enabled: true,
                             mode: 'index',
                             intersect: false,
+                            backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                            titleColor: '#000',
+                            bodyColor: '#000',
+                            borderColor: '#ddd',
+                            borderWidth: 1,
+                            padding: 10,
                             callbacks: {
                                 label: function(context) {
                                     let label = context.dataset.label || '';
@@ -578,7 +646,8 @@
                                 display: true,
                                 text: 'Giá trị',
                                 font: {
-                                    weight: 'bold'
+                                    weight: 'bold',
+                                    size: 12
                                 }
                             },
                             grid: {
@@ -587,6 +656,9 @@
                             ticks: {
                                 callback: function(value) {
                                     return value.toFixed(2);
+                                },
+                                font: {
+                                    size: 11
                                 }
                             }
                         },
@@ -595,19 +667,30 @@
                                 display: true,
                                 text: 'Ngày',
                                 font: {
-                                    weight: 'bold'
+                                    weight: 'bold',
+                                    size: 12
                                 }
                             },
                             grid: {
                                 color: 'rgba(0, 0, 0, 0.1)'
+                            },
+                            ticks: {
+                                maxRotation: 45,
+                                minRotation: 45,
+                                font: {
+                                    size: 11
+                                }
                             }
                         }
                     }
                 }
             });
+
+            // Đảm bảo biểu đồ được vẽ lại
+            comparisonChart.update();
         }
 
-        function displayStep7(predictions) {
+        function displayStep7(predictions, futurePredictions) {
             const table = document.querySelector('#table7 tbody');
             table.innerHTML = '';
             
@@ -615,7 +698,9 @@
             chartData = {
                 labels: [],
                 actual: [],
-                predicted: []
+                predicted: [],
+                futureLabels: [],
+                futurePredicted: []
             };
 
             predictions.forEach(prediction => {
@@ -631,8 +716,32 @@
             });
             
             document.getElementById('step7').style.display = 'block';
+            
+            // Hiển thị dự đoán tương lai
+            if (futurePredictions) {
+                const futureTable = document.querySelector('#tableFuture tbody');
+                futureTable.innerHTML = '';
+                
+                futurePredictions.forEach(prediction => {
+                    const row = futureTable.insertRow();
+                    row.insertCell(0).textContent = prediction.date;
+                    row.insertCell(1).textContent = prediction.predicted.toFixed(2);
+
+                    // Thêm dữ liệu tương lai cho biểu đồ
+                    chartData.futureLabels.push(prediction.date);
+                    chartData.futurePredicted.push(prediction.predicted);
+                });
+                
+                document.getElementById('futurePredictions').style.display = 'block';
+            }
+            
+            // Đảm bảo container biểu đồ có kích thước phù hợp
+            const chartContainer = document.getElementById('chartContainer');
+            chartContainer.style.height = '400px';
+            chartContainer.style.display = 'block';
+            
             // Tự động hiển thị biểu đồ sau khi có dữ liệu
-            showChart();
+            setTimeout(showChart, 100);
         }
     </script>
 </body>
