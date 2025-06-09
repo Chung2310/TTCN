@@ -349,6 +349,7 @@ def create_fuzzy_relations(fuzzified_data, order=1):
         return {'order1': [], 'order3': []}
         
     relations = []
+    order3_relations = []
     
     # Quan hệ bậc 1
     for i in range(len(fuzzified_data) - 1):
@@ -357,13 +358,12 @@ def create_fuzzy_relations(fuzzified_data, order=1):
         
         if current_state and next_state:  # Chỉ thêm quan hệ nếu cả hai trạng thái đều tồn tại
             relations.append({
-                'current': current_state,  # Lưu dưới dạng string
+                'current': current_state,
                 'next': next_state,
                 'date': fuzzified_data[i+1].get('date')
             })
     
     # Quan hệ bậc 3
-    order3_relations = []
     if len(fuzzified_data) >= 4:  # Cần ít nhất 4 điểm dữ liệu để tạo quan hệ bậc 3
         for i in range(len(fuzzified_data) - 3):
             current_states = [
@@ -375,7 +375,7 @@ def create_fuzzy_relations(fuzzified_data, order=1):
             
             if all(current_states) and next_state:  # Chỉ thêm quan hệ nếu tất cả trạng thái đều tồn tại
                 order3_relations.append({
-                    'current': current_states,  # Lưu dưới dạng list
+                    'current': current_states,
                     'next': next_state,
                     'date': fuzzified_data[i+3].get('date')
                 })
@@ -385,16 +385,10 @@ def create_fuzzy_relations(fuzzified_data, order=1):
         'order3': order3_relations
     }
 
-def create_fuzzy_groups(relations):
-    """Bước 6: Thiết lập NQHM-PTTG bậc p
+def group_fuzzy_relations(relations):
+    """Bước 6: Gom nhóm các quan hệ mờ
     
-    Sử dụng khái niệm nhóm quan hệ mờ để thiết lập nhóm quan hệ mờ phụ thuộc thời gian.
-    
-    Ví dụ:
-    - t = 1972: Nhóm 1: A_1 → A_1
-    - t = 1973: Nhóm 2: A_1 → A_1, A_2
-    - t = 1974: Nhóm 3: A_1 → A_1, A_2, A_3
-    - t = 1975: Nhóm 4: A_3 → A_4
+    Gom nhóm các quan hệ mờ có cùng vế trái để tạo thành các nhóm quan hệ mờ.
     
     Args:
         relations: Dict chứa các quan hệ mờ:
@@ -402,37 +396,88 @@ def create_fuzzy_groups(relations):
             - order3: List các quan hệ mờ bậc 3
             
     Returns:
-        List các dict chứa thông tin nhóm quan hệ mờ:
-        - date: Ngày tháng
-        - group_count: Số thứ tự nhóm
-        - current_fuzzy_set: Tập mờ hiện tại
-        - order1_relations: Các quan hệ mờ bậc 1
-        - order3_relations: Các quan hệ mờ bậc 3
+        Dict chứa các nhóm quan hệ mờ:
+            - order1: Dict với key là vế trái và value là set các vế phải
+            - order3: List các quan hệ mờ bậc 3
+            - order1_relations: List các quan hệ mờ bậc 1 với thông tin ngày
+    """
+    grouped_relations = {
+        'order1': {},
+        'order3': relations['order3'],
+        'order1_relations': relations['order1']
+    }
+    
+    # Gom nhóm quan hệ bậc 1
+    for relation in relations['order1']:
+        if not relation.get('current') or not relation.get('next'):
+            continue
+            
+        current = relation['current']
+        next_state = relation['next']
+        
+        if current not in grouped_relations['order1']:
+            grouped_relations['order1'][current] = set()
+        grouped_relations['order1'][current].add(next_state)
+    
+    return grouped_relations
+
+def create_fuzzy_groups(relations):
+    """Bước 7: Thiết lập NQHM-PTTG bậc p
+    
+    Sử dụng khái niệm nhóm quan hệ mờ để thiết lập nhóm quan hệ mờ phụ thuộc thời gian.
+    Xét tất cả các quan hệ mờ xảy ra trước và tại thời điểm hiện tại để tạo nhóm.
+    
+    Args:
+        relations: Dict chứa các quan hệ mờ:
+            - order1: Dict với key là vế trái và value là set các vế phải
+            - order3: List các quan hệ mờ bậc 3
+            - order1_relations: List các quan hệ mờ bậc 1 với thông tin ngày
+            
+    Returns:
+        Dict chứa hai bảng:
+        - fuzzy_groups: Bảng quan hệ mờ theo thời gian
+        - time_dependent_groups: Bảng nhóm quan hệ mờ phụ thuộc thời gian
     """
     # Tạo bảng theo ngày
     date_groups = {}
     
-    # Xử lý quan hệ bậc 1
-    for relation in relations['order1']:
+    # Sắp xếp các quan hệ bậc 1 theo ngày
+    sorted_relations = sorted(relations['order1_relations'], key=lambda x: x.get('date', ''))
+    
+    # Nhóm các quan hệ bậc 1 theo thời gian
+    for i, relation in enumerate(sorted_relations):
         if not relation.get('current') or not relation.get('next') or not relation.get('date'):
             continue
             
         date = relation['date']
-        current = relation['current']  # Đã là string
+        current = relation['current']
         
         if date not in date_groups:
             date_groups[date] = {
                 'date': date,
                 'group_count': 0,
                 'current_fuzzy_set': current,
-                'order1_relations': {},  # Dict để gom nhóm theo vế trái
+                'order1_relations': set(),
                 'order3_relations': set()
             }
         
-        # Gom nhóm các quan hệ có cùng vế trái
-        if current not in date_groups[date]['order1_relations']:
-            date_groups[date]['order1_relations'][current] = set()
-        date_groups[date]['order1_relations'][current].add(relation['next'])
+        # Nhóm các quan hệ có cùng vế trái từ đầu đến thời điểm hiện tại
+        left_side_groups = {}
+        for prev_relation in sorted_relations[:i+1]:
+            if prev_relation.get('current') and prev_relation.get('next'):
+                left_side = prev_relation['current']
+                right_side = prev_relation['next']
+                
+                if left_side not in left_side_groups:
+                    left_side_groups[left_side] = set()
+                left_side_groups[left_side].add(right_side)
+        
+        # Tạo chuỗi quan hệ cho mỗi nhóm vế trái
+        for left_side, right_sides in left_side_groups.items():
+            # Chỉ thêm quan hệ nếu vế trái là tập mờ hiện tại
+            if left_side == current:
+                relation_str = f"{left_side} → {', '.join(sorted(right_sides))}"
+                date_groups[date]['order1_relations'].add(relation_str)
     
     # Xử lý quan hệ bậc 3
     for relation in relations['order3']:
@@ -442,16 +487,17 @@ def create_fuzzy_groups(relations):
         date = relation['date']
         current = relation['current'][-1] if isinstance(relation['current'], list) else relation['current']
         
+        # Khởi tạo nhóm cho ngày hiện tại nếu chưa có
         if date not in date_groups:
             date_groups[date] = {
                 'date': date,
                 'group_count': 0,
                 'current_fuzzy_set': current,
-                'order1_relations': {},
+                'order1_relations': set(),
                 'order3_relations': set()
             }
         
-        # Format quan hệ mờ bậc 3
+        # Thêm quan hệ bậc 3 vào nhóm
         current_states = ', '.join(relation['current']) if isinstance(relation['current'], list) else relation['current']
         relation_str = f"{current_states} → {relation['next']}"
         date_groups[date]['order3_relations'].add(relation_str)
@@ -461,22 +507,18 @@ def create_fuzzy_groups(relations):
     for i, date in enumerate(sorted_dates, 1):
         date_groups[date]['group_count'] = i
     
-    # Chuyển đổi thành danh sách và format kết quả
-    result = []
+    # Format kết quả cho bảng quan hệ mờ theo thời gian
+    fuzzy_groups = []
     for date in sorted_dates:
         group = date_groups[date]
         
-        # Format quan hệ bậc 1: gom nhóm theo vế trái
-        order1_relations = []
-        for left_side, right_sides in sorted(group['order1_relations'].items()):
-            right_sides_str = ', '.join(sorted(right_sides))
-            order1_relations.append(f"{left_side} → {right_sides_str}")
+        # Format quan hệ bậc 1
+        order1_relations = sorted(list(group['order1_relations']))
         
         # Format quan hệ bậc 3
         order3_relations = sorted(list(group['order3_relations']))
         
-        # Format kết quả
-        result.append({
+        fuzzy_groups.append({
             'date': group['date'],
             'group_count': group['group_count'],
             'current_fuzzy_set': group['current_fuzzy_set'],
@@ -484,10 +526,13 @@ def create_fuzzy_groups(relations):
             'order3_relations': ' | '.join(order3_relations) if order3_relations else '-'
         })
     
-    return result
+    return {
+        'fuzzy_groups': fuzzy_groups,
+        'time_dependent_groups': fuzzy_groups  # Sử dụng cùng dữ liệu cho cả hai bảng
+    }
 
 def defuzzify(predicted_set, fuzzy_sets, q=10, w_h=15):
-    """Bước 7: Giải mờ và tính toán giá trị đầu ra dự báo
+    """Bước 8: Giải mờ và tính toán giá trị đầu ra dự báo
     
     Thực hiện giải mờ dữ liệu và tính toán giá trị dự báo cho các nhóm quan hệ mờ bậc một và bậc cao
     theo 3 quy tắc:
@@ -750,8 +795,11 @@ def fuzzy_time_series_prediction(data, clustering_method='kmeans', num_intervals
     # Bước 6: Xác định quan hệ mờ
     fuzzy_relations = create_fuzzy_relations(fuzzified_data)
     
-    # Bước 7: Tạo nhóm quan hệ mờ
-    fuzzy_groups = create_fuzzy_groups(fuzzy_relations)
+    # Bước 7: Gom nhóm các quan hệ mờ
+    grouped_relations = group_fuzzy_relations(fuzzy_relations)
+    
+    # Bước 8: Tạo nhóm quan hệ mờ
+    fuzzy_groups = create_fuzzy_groups(grouped_relations)
     
     # Dự đoán cho dữ liệu hiện có
     predictions = []
@@ -798,7 +846,7 @@ def fuzzy_time_series_prediction(data, clustering_method='kmeans', num_intervals
         order1_predicted = None
         order1_rule = None
         if current_fuzzy_set:
-            for group in fuzzy_groups:
+            for group in fuzzy_groups['fuzzy_groups']:
                 if not group.get('order1_relations'):
                     continue
                     
@@ -821,7 +869,7 @@ def fuzzy_time_series_prediction(data, clustering_method='kmeans', num_intervals
         order3_rule = None
         if len(recent_states) == 3:
             current_key = ','.join(recent_states)
-            for group in fuzzy_groups:
+            for group in fuzzy_groups['fuzzy_groups']:
                 if not group.get('order3_relations'):
                     continue
                     
@@ -913,7 +961,7 @@ def fuzzy_time_series_prediction(data, clustering_method='kmeans', num_intervals
             if current_fuzzy_set:
                 # Lấy tất cả các tập mờ từ quan hệ bậc 3
                 all_sets = []
-                for group in fuzzy_groups:
+                for group in fuzzy_groups['fuzzy_groups']:
                     if group.get('order3_relations'):
                         for relation in group['order3_relations'].split(', '):
                             parts = relation.split(' → ')
@@ -975,7 +1023,7 @@ def fuzzy_time_series_prediction(data, clustering_method='kmeans', num_intervals
         'fuzzified_data': fuzzified_data,
         'fuzzy_relations': fuzzy_relations,
         'fuzzy_groups': fuzzy_groups,
-        'fuzzy_groups_table': fuzzy_groups,
+        'fuzzy_groups_table': fuzzy_groups['fuzzy_groups'],
         'predictions': predictions
     }
 

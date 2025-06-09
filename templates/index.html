@@ -294,14 +294,35 @@
             </div>
         </div>
 
-        <!-- Bước 6: Nhóm quan hệ mờ -->
+        <!-- Bước 6: Xác định quan hệ mờ -->
         <div id="step6" class="card">
             <div class="card-header">
-                <h5 class="step-title"><i class="fas fa-object-group"></i> Bước 6: Nhóm quan hệ mờ phụ thuộc thời gian (NQHM-PTTG)</h5>
+                <h5 class="step-title"><i class="fas fa-project-diagram"></i> Bước 6: Xác định quan hệ mờ</h5>
             </div>
             <div class="card-body">
                 <div class="table-responsive">
                     <table id="table6" class="table">
+                        <thead>
+                            <tr>
+                                <th>Ngày</th>
+                                <th>Quan hệ bậc 1</th>
+                                <th>Quan hệ bậc 3</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bước 7: Nhóm quan hệ mờ phụ thuộc thời gian -->
+        <div id="step7" class="card">
+            <div class="card-header">
+                <h5 class="step-title"><i class="fas fa-object-group"></i> Bước 7: Nhóm quan hệ mờ phụ thuộc thời gian (NQHM-PTTG)</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table id="table7" class="table">
                         <thead>
                             <tr>
                                 <th>Ngày</th>
@@ -317,14 +338,14 @@
             </div>
         </div>
 
-        <!-- Bước 7: Dự đoán -->
-        <div id="step7" class="card">
+        <!-- Bước 8: Dự đoán -->
+        <div id="step8" class="card">
             <div class="card-header">
-                <h5 class="step-title"><i class="fas fa-chart-line"></i> Bước 7: Giải mờ và tính toán giá trị dự báo</h5>
+                <h5 class="step-title"><i class="fas fa-chart-line"></i> Bước 8: Giải mờ và tính toán giá trị dự báo</h5>
             </div>
             <div class="card-body">
                 <div class="table-responsive">
-                    <table id="table7" class="table">
+                    <table id="table8" class="table">
                         <thead>
                             <tr>
                                 <th>Năm(t)</th>
@@ -421,7 +442,8 @@
                     displayStep4(result.fuzzy_sets);
                     displayStep5(result.fuzzified_data);
                     displayStep6(result.fuzzy_relations);
-                    displayStep7(result.predictions);
+                    displayStep7(result.fuzzy_groups);
+                    displayStep8(result.predictions);
                     
                     // Ẩn loading
                     loading.style.display = 'none';
@@ -500,61 +522,106 @@
             const table = document.querySelector('#table6 tbody');
             table.innerHTML = '';
             
-            // Hiển thị các quan hệ mờ theo ngày
+            // Tạo map để lưu trữ các quan hệ theo ngày
+            const dateMap = new Map();
+            
+            // Xử lý quan hệ bậc 1
             if (fuzzyRelations && fuzzyRelations.order1) {
-                // Tạo một map để lưu trữ các quan hệ theo ngày
-                const dateGroups = new Map();
-                
-                // Xử lý quan hệ bậc 1
                 fuzzyRelations.order1.forEach(relation => {
-                    const date = relation.date;
-                    if (!dateGroups.has(date)) {
-                        dateGroups.set(date, {
-                            date: date,
-                            group_count: dateGroups.size + 1,
-                            current_fuzzy_set: relation.current,  // Đã là string A1, A2,...
-                            order1_relations: [],
-                            order3_relations: []
+                    if (!dateMap.has(relation.date)) {
+                        dateMap.set(relation.date, {
+                            date: relation.date,
+                            order1: `${relation.current} → ${relation.next}`,
+                            order3: ''
                         });
+                    } else {
+                        const existing = dateMap.get(relation.date);
+                        existing.order1 = `${relation.current} → ${relation.next}`;
                     }
-                    const relationStr = `${relation.current} → ${relation.next}`;
-                    if (!dateGroups.get(date).order1_relations.includes(relationStr)) {
-                        dateGroups.get(date).order1_relations.push(relationStr);
-                    }
-                });
-                
-                // Xử lý quan hệ bậc 3
-                if (fuzzyRelations.order3) {
-                    fuzzyRelations.order3.forEach(relation => {
-                        const date = relation.date;
-                        if (!dateGroups.has(date)) {
-                            dateGroups.set(date, {
-                                date: date,
-                                group_count: dateGroups.size + 1,
-                                current_fuzzy_set: relation.current[2],  // Lấy phần tử cuối cùng của mảng
-                                order1_relations: [],
-                                order3_relations: []
-                            });
-                        }
-                        const relationStr = `${relation.current.join(', ')} → ${relation.next}`;
-                        if (!dateGroups.get(date).order3_relations.includes(relationStr)) {
-                            dateGroups.get(date).order3_relations.push(relationStr);
-                        }
-                    });
-                }
-                
-                // Hiển thị dữ liệu trong bảng
-                Array.from(dateGroups.values()).forEach(group => {
-                    const row = table.insertRow();
-                    row.insertCell(0).textContent = group.date;
-                    row.insertCell(1).textContent = group.group_count;
-                    row.insertCell(2).textContent = group.current_fuzzy_set;  // Hiển thị nhãn tập mờ
-                    row.insertCell(3).textContent = group.order1_relations.join(' | ');
-                    row.insertCell(4).textContent = group.order3_relations.join(' | ');
                 });
             }
             
+            // Xử lý quan hệ bậc 3
+            if (fuzzyRelations && fuzzyRelations.order3) {
+                fuzzyRelations.order3.forEach(relation => {
+                    if (!dateMap.has(relation.date)) {
+                        dateMap.set(relation.date, {
+                            date: relation.date,
+                            order1: '',
+                            order3: `${relation.current.join(', ')} → ${relation.next}`
+                        });
+                    } else {
+                        const existing = dateMap.get(relation.date);
+                        existing.order3 = `${relation.current.join(', ')} → ${relation.next}`;
+                    }
+                });
+            }
+            
+            // Sắp xếp theo ngày và hiển thị
+            const sortedDates = Array.from(dateMap.keys()).sort();
+            sortedDates.forEach(date => {
+                const relation = dateMap.get(date);
+                const row = table.insertRow();
+                row.insertCell(0).textContent = relation.date;
+                row.insertCell(1).textContent = relation.order1;
+                row.insertCell(2).textContent = relation.order3;
+            });
+            
             document.getElementById('step6').style.display = 'block';
+        }
+
+        function displayStep7(fuzzyGroups) {
+            const table = document.querySelector('#table7 tbody');
+            table.innerHTML = '';
+            
+            // Hiển thị các nhóm quan hệ mờ phụ thuộc thời gian
+            if (fuzzyGroups && fuzzyGroups.fuzzy_groups) {
+                fuzzyGroups.fuzzy_groups.forEach(group => {
+                    const row = table.insertRow();
+                    row.insertCell(0).textContent = group.date;
+                    row.insertCell(1).textContent = group.group_count;
+                    row.insertCell(2).textContent = group.current_fuzzy_set;
+                    row.insertCell(3).textContent = group.order1_relations;
+                    row.insertCell(4).textContent = group.order3_relations;
+                });
+            }
+            
+            document.getElementById('step7').style.display = 'block';
+        }
+
+        function displayStep8(predictions) {
+            const table = document.querySelector('#table8 tbody');
+            table.innerHTML = '';
+            
+            predictions.forEach(prediction => {
+                const row = table.insertRow();
+                row.insertCell(0).textContent = prediction.date;
+                // Hiển thị "N/A" nếu tập mờ là "#"
+                row.insertCell(1).textContent = prediction.fuzzy_set === '#' ? 'N/A' : prediction.actual.toFixed(2);
+                row.insertCell(2).textContent = prediction.fuzzy_set || 'N/A';
+                row.insertCell(3).textContent = prediction.order1_predicted ? prediction.order1_predicted.toFixed(2) : '';
+                row.insertCell(4).textContent = prediction.order3_predicted ? prediction.order3_predicted.toFixed(2) : '';
+                
+                // Thêm dòng hiển thị quy tắc sử dụng
+                const ruleRow = table.insertRow();
+                ruleRow.insertCell(0).textContent = '';
+                ruleRow.insertCell(1).textContent = '';
+                ruleRow.insertCell(2).textContent = '';
+                ruleRow.insertCell(3).textContent = prediction.order1_predicted ? (prediction.order1_rule || 'Quy tắc 1/2') : '';
+                ruleRow.insertCell(4).textContent = prediction.order3_predicted ? (prediction.order3_rule || 'Quy tắc 3') : '';
+            });
+            
+            document.getElementById('step8').style.display = 'block';
+            
+            // Cập nhật dữ liệu cho biểu đồ
+            chartData = {
+                labels: predictions.map(p => p.date),
+                actual: predictions.map(p => p.fuzzy_set === '#' ? null : p.actual),  // Bỏ qua giá trị thực khi tập mờ là "#"
+                predicted: predictions.map(p => p.order3_predicted) // Sử dụng dự đoán bậc 3 cho biểu đồ
+            };
+            
+            // Hiển thị biểu đồ
+            showChart();
         }
 
         let chartData = null;
@@ -626,48 +693,15 @@
             });
         }
 
-        function displayStep7(predictions) {
-            const table = document.querySelector('#table7 tbody');
-            table.innerHTML = '';
-            
-            predictions.forEach(prediction => {
-                const row = table.insertRow();
-                row.insertCell(0).textContent = prediction.date;
-                // Hiển thị "N/A" nếu tập mờ là "#"
-                row.insertCell(1).textContent = prediction.fuzzy_set === '#' ? 'N/A' : prediction.actual.toFixed(2);
-                row.insertCell(2).textContent = prediction.fuzzy_set || 'N/A';
-                row.insertCell(3).textContent = prediction.order1_predicted ? prediction.order1_predicted.toFixed(2) : '';
-                row.insertCell(4).textContent = prediction.order3_predicted ? prediction.order3_predicted.toFixed(2) : '';
-                
-                // Thêm dòng hiển thị quy tắc sử dụng
-                const ruleRow = table.insertRow();
-                ruleRow.insertCell(0).textContent = '';
-                ruleRow.insertCell(1).textContent = '';
-                ruleRow.insertCell(2).textContent = '';
-                ruleRow.insertCell(3).textContent = prediction.order1_predicted ? (prediction.order1_rule || 'Quy tắc 1/2') : '';
-                ruleRow.insertCell(4).textContent = prediction.order3_predicted ? (prediction.order3_rule || 'Quy tắc 3') : '';
-            });
-            
-            document.getElementById('step7').style.display = 'block';
-            
-            // Cập nhật dữ liệu cho biểu đồ
-            chartData = {
-                labels: predictions.map(p => p.date),
-                actual: predictions.map(p => p.fuzzy_set === '#' ? null : p.actual),  // Bỏ qua giá trị thực khi tập mờ là "#"
-                predicted: predictions.map(p => p.order3_predicted) // Sử dụng dự đoán bậc 3 cho biểu đồ
-            };
-            
-            // Hiển thị biểu đồ
-            showChart();
-        }
-
         function displayResults(data) {
-            // Display fuzzy groups (Step 6)
-            window.fuzzyGroupsTable = data.fuzzy_groups_table;
+            // Display fuzzy relations (Step 6)
             displayStep6(data.fuzzy_relations);
             
-            // Display predictions (Step 7)
-            displayStep7(data.predictions);
+            // Display fuzzy groups (Step 7)
+            displayStep7(data.fuzzy_groups);
+            
+            // Display predictions (Step 8)
+            displayStep8(data.predictions);
         }
     </script>
 </body>
