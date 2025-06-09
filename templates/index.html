@@ -294,18 +294,21 @@
             </div>
         </div>
 
-        <!-- Bước 6: Xác định mối quan hệ mờ -->
+        <!-- Bước 6: Nhóm quan hệ mờ -->
         <div id="step6" class="card">
             <div class="card-header">
-                <h5 class="step-title"><i class="fas fa-link"></i> Bước 6: Xác định mối quan hệ mờ</h5>
+                <h5 class="step-title"><i class="fas fa-object-group"></i> Bước 6: Nhóm quan hệ mờ phụ thuộc thời gian (NQHM-PTTG)</h5>
             </div>
             <div class="card-body">
                 <div class="table-responsive">
                     <table id="table6" class="table">
                         <thead>
                             <tr>
-                                <th>Tập mờ hiện tại</th>
-                                <th>Tập mờ tiếp theo</th>
+                                <th>Ngày</th>
+                                <th>Số nhóm</th>
+                                <th>Tập mờ</th>
+                                <th>NQHM_PTTG bậc 1</th>
+                                <th>NQHM_PTTG bậc 3</th>
                             </tr>
                         </thead>
                         <tbody></tbody>
@@ -317,36 +320,25 @@
         <!-- Bước 7: Dự đoán -->
         <div id="step7" class="card">
             <div class="card-header">
-                <h5 class="step-title"><i class="fas fa-chart-bar"></i> Bước 7: Kết quả dự đoán</h5>
+                <h5 class="step-title"><i class="fas fa-chart-line"></i> Bước 7: Giải mờ và tính toán giá trị dự báo</h5>
             </div>
             <div class="card-body">
                 <div class="table-responsive">
                     <table id="table7" class="table">
                         <thead>
                             <tr>
-                                <th>Ngày</th>
-                                <th>Giá trị thực tế</th>
-                                <th>Giá trị dự đoán</th>
+                                <th>Năm(t)</th>
+                                <th>DL thực</th>
+                                <th>Tập mờ</th>
+                                <th>Giá trị dự báo</th>
+                                <th></th>
                             </tr>
-                        </thead>
-                        <tbody></tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-
-        <!-- Dự đoán tương lai -->
-        <div id="futurePredictions" class="card">
-            <div class="card-header">
-                <h5 class="step-title"><i class="fas fa-calendar-alt"></i> Dự đoán 10 ngày tiếp theo</h5>
-            </div>
-            <div class="card-body">
-                <div class="table-responsive">
-                    <table id="tableFuture" class="table">
-                        <thead>
                             <tr>
-                                <th>Ngày</th>
-                                <th>Giá trị dự đoán</th>
+                                <th></th>
+                                <th></th>
+                                <th></th>
+                                <th>Quan hệ bậc 1</th>
+                                <th>Quan hệ bậc 3</th>
                             </tr>
                         </thead>
                         <tbody></tbody>
@@ -429,7 +421,7 @@
                     displayStep4(result.fuzzy_sets);
                     displayStep5(result.fuzzified_data);
                     displayStep6(result.fuzzy_relations);
-                    displayStep7(result.predictions, result.future_predictions);
+                    displayStep7(result.predictions);
                     
                     // Ẩn loading
                     loading.style.display = 'none';
@@ -507,11 +499,61 @@
         function displayStep6(fuzzyRelations) {
             const table = document.querySelector('#table6 tbody');
             table.innerHTML = '';
-            fuzzyRelations.forEach(relation => {
-                const row = table.insertRow();
-                row.insertCell(0).textContent = relation.current;
-                row.insertCell(1).textContent = relation.next;
-            });
+            
+            // Hiển thị các quan hệ mờ theo ngày
+            if (fuzzyRelations && fuzzyRelations.order1) {
+                // Tạo một map để lưu trữ các quan hệ theo ngày
+                const dateGroups = new Map();
+                
+                // Xử lý quan hệ bậc 1
+                fuzzyRelations.order1.forEach(relation => {
+                    const date = relation.date;
+                    if (!dateGroups.has(date)) {
+                        dateGroups.set(date, {
+                            date: date,
+                            group_count: dateGroups.size + 1,
+                            current_fuzzy_set: relation.current,  // Đã là string A1, A2,...
+                            order1_relations: [],
+                            order3_relations: []
+                        });
+                    }
+                    const relationStr = `${relation.current} → ${relation.next}`;
+                    if (!dateGroups.get(date).order1_relations.includes(relationStr)) {
+                        dateGroups.get(date).order1_relations.push(relationStr);
+                    }
+                });
+                
+                // Xử lý quan hệ bậc 3
+                if (fuzzyRelations.order3) {
+                    fuzzyRelations.order3.forEach(relation => {
+                        const date = relation.date;
+                        if (!dateGroups.has(date)) {
+                            dateGroups.set(date, {
+                                date: date,
+                                group_count: dateGroups.size + 1,
+                                current_fuzzy_set: relation.current[2],  // Lấy phần tử cuối cùng của mảng
+                                order1_relations: [],
+                                order3_relations: []
+                            });
+                        }
+                        const relationStr = `${relation.current.join(', ')} → ${relation.next}`;
+                        if (!dateGroups.get(date).order3_relations.includes(relationStr)) {
+                            dateGroups.get(date).order3_relations.push(relationStr);
+                        }
+                    });
+                }
+                
+                // Hiển thị dữ liệu trong bảng
+                Array.from(dateGroups.values()).forEach(group => {
+                    const row = table.insertRow();
+                    row.insertCell(0).textContent = group.date;
+                    row.insertCell(1).textContent = group.group_count;
+                    row.insertCell(2).textContent = group.current_fuzzy_set;  // Hiển thị nhãn tập mờ
+                    row.insertCell(3).textContent = group.order1_relations.join(' | ');
+                    row.insertCell(4).textContent = group.order3_relations.join(' | ');
+                });
+            }
+            
             document.getElementById('step6').style.display = 'block';
         }
 
@@ -535,7 +577,7 @@
             const ctx = document.getElementById('comparisonChart').getContext('2d');
             
             // Tính toán min và max cho trục y
-            const allValues = [...chartData.actual, ...chartData.predicted, ...chartData.futurePredicted];
+            const allValues = [...chartData.actual, ...chartData.predicted];
             const minValue = Math.min(...allValues);
             const maxValue = Math.max(...allValues);
             const padding = (maxValue - minValue) * 0.1; // Thêm 10% padding
@@ -544,11 +586,11 @@
             comparisonChart = new Chart(ctx, {
                 type: 'line',
                 data: {
-                    labels: [...chartData.labels, ...chartData.futureLabels],
+                    labels: chartData.labels,
                     datasets: [
                         {
                             label: 'Giá trị thực tế',
-                            data: [...chartData.actual, ...Array(chartData.futureLabels.length).fill(null)],
+                            data: chartData.actual,
                             borderColor: 'rgb(75, 192, 192)',
                             backgroundColor: 'rgba(75, 192, 192, 0.2)',
                             tension: 0.1,
@@ -558,8 +600,8 @@
                             borderWidth: 2
                         },
                         {
-                            label: 'Giá trị dự đoán (lịch sử)',
-                            data: [...chartData.predicted, ...Array(chartData.futureLabels.length).fill(null)],
+                            label: 'Giá trị dự đoán (bậc 3)',
+                            data: chartData.predicted,
                             borderColor: 'rgb(255, 99, 132)',
                             backgroundColor: 'rgba(255, 99, 132, 0.2)',
                             tension: 0.1,
@@ -568,180 +610,64 @@
                             pointHoverRadius: 6,
                             borderWidth: 2,
                             borderDash: [5, 5]
-                        },
-                        {
-                            label: 'Dự đoán tương lai',
-                            data: [...Array(chartData.labels.length).fill(null), ...chartData.futurePredicted],
-                            borderColor: 'rgb(153, 102, 255)',
-                            backgroundColor: 'rgba(153, 102, 255, 0.2)',
-                            tension: 0.1,
-                            fill: false,
-                            pointRadius: 4,
-                            pointHoverRadius: 6,
-                            borderWidth: 2,
-                            borderDash: [2, 2]
                         }
                     ]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    interaction: {
-                        intersect: false,
-                        mode: 'index'
-                    },
-                    plugins: {
-                        title: {
-                            display: true,
-                            text: 'So sánh giá trị thực tế và dự đoán',
-                            font: {
-                                size: 16,
-                                weight: 'bold'
-                            },
-                            padding: {
-                                top: 10,
-                                bottom: 20
-                            }
-                        },
-                        legend: {
-                            position: 'top',
-                            labels: {
-                                usePointStyle: true,
-                                padding: 20,
-                                font: {
-                                    size: 12
-                                }
-                            }
-                        },
-                        tooltip: {
-                            enabled: true,
-                            mode: 'index',
-                            intersect: false,
-                            backgroundColor: 'rgba(255, 255, 255, 0.9)',
-                            titleColor: '#000',
-                            bodyColor: '#000',
-                            borderColor: '#ddd',
-                            borderWidth: 1,
-                            padding: 10,
-                            callbacks: {
-                                label: function(context) {
-                                    let label = context.dataset.label || '';
-                                    if (label) {
-                                        label += ': ';
-                                    }
-                                    if (context.parsed.y !== null) {
-                                        label += context.parsed.y.toFixed(2);
-                                    }
-                                    return label;
-                                }
-                            }
-                        }
-                    },
                     scales: {
                         y: {
                             min: minValue - padding,
-                            max: maxValue + padding,
-                            beginAtZero: false,
-                            title: {
-                                display: true,
-                                text: 'Giá trị',
-                                font: {
-                                    weight: 'bold',
-                                    size: 12
-                                }
-                            },
-                            grid: {
-                                color: 'rgba(0, 0, 0, 0.1)'
-                            },
-                            ticks: {
-                                callback: function(value) {
-                                    return value.toFixed(2);
-                                },
-                                font: {
-                                    size: 11
-                                }
-                            }
-                        },
-                        x: {
-                            title: {
-                                display: true,
-                                text: 'Ngày',
-                                font: {
-                                    weight: 'bold',
-                                    size: 12
-                                }
-                            },
-                            grid: {
-                                color: 'rgba(0, 0, 0, 0.1)'
-                            },
-                            ticks: {
-                                maxRotation: 45,
-                                minRotation: 45,
-                                font: {
-                                    size: 11
-                                }
-                            }
+                            max: maxValue + padding
                         }
                     }
                 }
             });
-
-            // Đảm bảo biểu đồ được vẽ lại
-            comparisonChart.update();
         }
 
-        function displayStep7(predictions, futurePredictions) {
+        function displayStep7(predictions) {
             const table = document.querySelector('#table7 tbody');
             table.innerHTML = '';
             
-            // Chuẩn bị dữ liệu cho biểu đồ
-            chartData = {
-                labels: [],
-                actual: [],
-                predicted: [],
-                futureLabels: [],
-                futurePredicted: []
-            };
-
             predictions.forEach(prediction => {
                 const row = table.insertRow();
                 row.insertCell(0).textContent = prediction.date;
-                row.insertCell(1).textContent = prediction.actual.toFixed(2);
-                row.insertCell(2).textContent = prediction.predicted.toFixed(2);
-
-                // Thêm dữ liệu cho biểu đồ
-                chartData.labels.push(prediction.date);
-                chartData.actual.push(prediction.actual);
-                chartData.predicted.push(prediction.predicted);
+                // Hiển thị "N/A" nếu tập mờ là "#"
+                row.insertCell(1).textContent = prediction.fuzzy_set === '#' ? 'N/A' : prediction.actual.toFixed(2);
+                row.insertCell(2).textContent = prediction.fuzzy_set || 'N/A';
+                row.insertCell(3).textContent = prediction.order1_predicted ? prediction.order1_predicted.toFixed(2) : '';
+                row.insertCell(4).textContent = prediction.order3_predicted ? prediction.order3_predicted.toFixed(2) : '';
+                
+                // Thêm dòng hiển thị quy tắc sử dụng
+                const ruleRow = table.insertRow();
+                ruleRow.insertCell(0).textContent = '';
+                ruleRow.insertCell(1).textContent = '';
+                ruleRow.insertCell(2).textContent = '';
+                ruleRow.insertCell(3).textContent = prediction.order1_predicted ? (prediction.order1_rule || 'Quy tắc 1/2') : '';
+                ruleRow.insertCell(4).textContent = prediction.order3_predicted ? (prediction.order3_rule || 'Quy tắc 3') : '';
             });
             
             document.getElementById('step7').style.display = 'block';
             
-            // Hiển thị dự đoán tương lai
-            if (futurePredictions) {
-                const futureTable = document.querySelector('#tableFuture tbody');
-                futureTable.innerHTML = '';
-                
-                futurePredictions.forEach(prediction => {
-                    const row = futureTable.insertRow();
-                    row.insertCell(0).textContent = prediction.date;
-                    row.insertCell(1).textContent = prediction.predicted.toFixed(2);
+            // Cập nhật dữ liệu cho biểu đồ
+            chartData = {
+                labels: predictions.map(p => p.date),
+                actual: predictions.map(p => p.fuzzy_set === '#' ? null : p.actual),  // Bỏ qua giá trị thực khi tập mờ là "#"
+                predicted: predictions.map(p => p.order3_predicted) // Sử dụng dự đoán bậc 3 cho biểu đồ
+            };
+            
+            // Hiển thị biểu đồ
+            showChart();
+        }
 
-                    // Thêm dữ liệu tương lai cho biểu đồ
-                    chartData.futureLabels.push(prediction.date);
-                    chartData.futurePredicted.push(prediction.predicted);
-                });
-                
-                document.getElementById('futurePredictions').style.display = 'block';
-            }
+        function displayResults(data) {
+            // Display fuzzy groups (Step 6)
+            window.fuzzyGroupsTable = data.fuzzy_groups_table;
+            displayStep6(data.fuzzy_relations);
             
-            // Đảm bảo container biểu đồ có kích thước phù hợp
-            const chartContainer = document.getElementById('chartContainer');
-            chartContainer.style.height = '400px';
-            chartContainer.style.display = 'block';
-            
-            // Tự động hiển thị biểu đồ sau khi có dữ liệu
-            setTimeout(showChart, 100);
+            // Display predictions (Step 7)
+            displayStep7(data.predictions);
         }
     </script>
 </body>
